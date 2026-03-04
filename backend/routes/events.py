@@ -33,6 +33,8 @@ def create_event(
         expected_count=event.expected_count,
         event_date=event.event_date,
         invitation_image=event.invitation_image,
+        latitude=event.latitude,
+        longitude=event.longitude,
         event_token=token
     )
 
@@ -106,6 +108,8 @@ def update_event(
     event.bus_stops = updated_event.bus_stops
     event.expected_count = updated_event.expected_count
     event.event_date = updated_event.event_date
+    event.latitude = updated_event.latitude
+    event.longitude = updated_event.longitude
 
     db.commit()
     db.refresh(event)
@@ -154,8 +158,11 @@ def get_event_by_token(
     return {
         "id": event.id,
         "event_name": event.event_name,
+        "event_date": event.event_date,
         "hall_name": event.hall_name,
         "location": event.location,
+        "latitude": event.latitude,
+        "longitude": event.longitude,
         "bus_routes": event.bus_routes,
         "bus_stops": event.bus_stops,
         "invitation_image": event.invitation_image

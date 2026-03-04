@@ -1,4 +1,4 @@
-from database import SessionLocal, engine, Base
+﻿from database import SessionLocal, engine, Base
 from models.models import User, Event
 from utils import security
 from datetime import datetime
@@ -33,7 +33,7 @@ def create_sample():
         event = Event(
             user_id=user.id,
             event_token=token,
-            event_name="Sample Wedding",
+            event_name="Sample Event",
             location="Park",
             expected_count=100,
             event_date=datetime.utcnow(),
@@ -65,3 +65,4 @@ def create_sample():
 
 if __name__ == "__main__":
     create_sample()
+

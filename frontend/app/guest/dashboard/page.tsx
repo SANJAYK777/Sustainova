@@ -1,18 +1,23 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../../services/api';
 import { useToast } from '../../../components/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
+import LeafletLocationMap from '../../../components/LeafletLocationMap';
 
 interface GuestEvent {
+  guest_qr_token?: string | null;
+  guest_qr_code_url?: string | null;
   event_name: string;
   event_date: string | null;
   location: string;
   hall_name: string;
   bus_routes: string;
   bus_stops: string;
+  latitude?: number | null;
+  longitude?: number | null;
   invitation_image?: string | null;
   invitation_image_url?: string | null;
 }
@@ -102,6 +107,10 @@ export default function GuestDashboard() {
       ? event.invitation_image
       : `http://localhost:8000/${event.invitation_image.replace(/^\/+/, '')}`
     : event.invitation_image_url || '';
+  const hasCoordinates = typeof event.latitude === 'number' && typeof event.longitude === 'number';
+  const navUrl = hasCoordinates
+    ? `https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location || event.hall_name)}`;
   const hasInviteBackground = Boolean(invitationUrl);
   const backgroundStyle = hasInviteBackground
     ? {
@@ -139,8 +148,24 @@ export default function GuestDashboard() {
               <p className="text-xs uppercase tracking-wider">Bus Routes</p>
               <p className="text-lg text-[var(--text-dark)] mt-1">{event.bus_routes}</p>
             </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider">Bus Stops</p>
+              <p className="text-lg text-[var(--text-dark)] mt-1">{event.bus_stops}</p>
+            </div>
           </div>
         </section>
+
+        {event.guest_qr_code_url && (
+          <section className={hasInviteBackground ? 'premium-card text-center bg-white/85 backdrop-blur-md' : 'premium-card text-center'}>
+            <h3 className="font-serif text-2xl mb-2">Your Check-In QR</h3>
+            <p className="text-[var(--text-soft)] mb-5">Show this at the entrance for fast check-in.</p>
+            <img
+              src={event.guest_qr_code_url}
+              alt="Guest check-in QR"
+              className="mx-auto h-52 w-52 rounded-2xl border border-[#C6A75E]/30 bg-white p-2 shadow-md"
+            />
+          </section>
+        )}
 
         <section className={hasInviteBackground ? 'premium-card text-center bg-white/85 backdrop-blur-md' : 'premium-card text-center'}>
           <h3 className="font-serif text-2xl mb-2">Need immediate help?</h3>
@@ -153,6 +178,24 @@ export default function GuestDashboard() {
               SOS
             </button>
           )}
+        </section>
+
+        <section className={hasInviteBackground ? 'premium-card bg-white/85 backdrop-blur-md' : 'premium-card'}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-serif text-2xl">Event Location Map</h3>
+            <a
+              href={navUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="gold-button"
+            >
+              Navigate to Event
+            </a>
+          </div>
+          <p className="mt-2 text-sm text-[var(--text-soft)]">{event.location}</p>
+          <div className="mt-4">
+            <LeafletLocationMap latitude={event.latitude} longitude={event.longitude} />
+          </div>
         </section>
       </div>
 
@@ -186,3 +229,4 @@ export default function GuestDashboard() {
     </main>
   );
 }
+

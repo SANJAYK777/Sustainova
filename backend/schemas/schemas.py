@@ -22,6 +22,8 @@ class OrganizerRegister(BaseModel):
     bus_routes: str
     bus_stops: str
     expected_count: int
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     invitation_image_url: Optional[str] = None
 
 
@@ -55,6 +57,8 @@ class EventCreate(BaseModel):
     expected_count: Optional[int] = None
     event_date: Optional[datetime] = None
     invitation_image: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class EventOut(BaseModel):
@@ -71,6 +75,8 @@ class EventOut(BaseModel):
     invitation_image: Optional[str]
     invitation_image_url: Optional[str]
     qr_code_url: Optional[str]
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -107,6 +113,8 @@ class GuestOut(BaseModel):
     transport_type: Optional[str] = None
     parking_type: str
     needs_room: Optional[str] = None
+    guest_qr_token: Optional[str] = None
+    guest_qr_code_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -127,6 +135,18 @@ class AttendanceOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CheckinResponse(BaseModel):
+    status: str
+    message: str
+    guest_id: int
+    guest_name: str
+    event_id: int
+    scanned_at: datetime
+    checked_in_guests: int
+    remaining_guests: int
+    real_present_count: int
 # ---------------- SOS ----------------
 
 class SOSCreate(BaseModel):
@@ -143,3 +163,24 @@ class SOSOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------- ML ----------------
+
+class MLPredictRequest(BaseModel):
+    event_id: Optional[int] = None
+    weather: Optional[str] = "clear"
+    group_size: Optional[int] = None
+    transport_type: Optional[str] = None
+    parking_required: Optional[str] = None
+    room_required: Optional[str] = None
+    distance_km: Optional[float] = None
+    day_of_week: Optional[str] = None
+
+
+class MLPredictResponse(BaseModel):
+    predicted_attendance: int
+    predicted_car_parking: int
+    predicted_bike_parking: int
+    predicted_rooms: int
+    food_estimate: int

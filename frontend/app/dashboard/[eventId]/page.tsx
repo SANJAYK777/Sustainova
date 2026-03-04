@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AxiosError } from 'axios';
 import { useEffect, useMemo, useState } from 'react';
@@ -107,7 +107,7 @@ export default function DashboardPage({ params }: { params: { eventId: string } 
     <main className="space-y-8">
       <header className="premium-card hover:-translate-y-2 transition-all duration-300 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">SustainaWed</p>
+          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">Eventify</p>
           <h1 className="font-serif text-4xl">Event Analytics</h1>
           <p className="text-sm text-[var(--text-soft)]">Event ID: {eventId}</p>
         </div>
@@ -168,3 +168,4 @@ export default function DashboardPage({ params }: { params: { eventId: string } 
     </main>
   );
 }
+

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AxiosError } from 'axios';
 import { useParams } from 'next/navigation';
@@ -21,6 +21,7 @@ export default function GuestPage() {
   });
 
   const [status, setStatus] = useState('');
+  const [guestQrCodeUrl, setGuestQrCodeUrl] = useState('');
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -48,12 +49,14 @@ export default function GuestPage() {
     }
 
     try {
-      await api.post('/guests/rsvp', {
+      const res = await api.post('/guests/rsvp', {
         ...form,
         parking_type: form.parking_type,
         phone: normalizePhone(form.phone),
         event_token: eventToken,
       });
+
+      setGuestQrCodeUrl(res.data?.guest_qr_code_url || '');
 
       setStatus('RSVP submitted successfully');
       setForm({
@@ -73,7 +76,7 @@ export default function GuestPage() {
   return (
     <main className="min-h-[80vh] flex items-center justify-center px-6 py-8">
       <section className="premium-card hover:-translate-y-2 transition-all duration-300 w-full max-w-2xl text-center">
-        <h1 className="font-serif text-5xl">Wedding RSVP</h1>
+        <h1 className="font-serif text-5xl">Event RSVP</h1>
         <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent mx-auto my-6" />
 
         <form onSubmit={submit} className="space-y-4 text-left">
@@ -155,7 +158,20 @@ export default function GuestPage() {
         </form>
 
         {status && <p className="mt-4 text-center text-[var(--emerald)]">{status}</p>}
+        {guestQrCodeUrl && (
+          <div className="mt-6 rounded-2xl border border-[#C6A75E]/30 bg-[#fffdf8] p-4">
+            <p className="text-sm text-[var(--text-soft)] mb-3">
+              Save this QR for entrance check-in.
+            </p>
+            <img
+              src={guestQrCodeUrl}
+              alt="Guest check-in QR"
+              className="mx-auto h-48 w-48 rounded-xl border border-[#C6A75E]/30 bg-white p-2"
+            />
+          </div>
+        )}
       </section>
     </main>
   );
 }
+

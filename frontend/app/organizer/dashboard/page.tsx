@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,11 +14,30 @@ interface GuestListItem {
   transport_type?: string;
 }
 
+interface RoomNeededGuest {
+  name: string;
+  phone: string;
+  number_of_people: number;
+}
+
 interface DashboardData {
   event_id: number;
   qr_code_url: string;
+  total_guests: number;
+  total_people: number;
+  total_parking: number;
+  total_rooms_needed: number;
+  expected_guests: number;
+  predicted_attendance: number;
+  predicted_car_parking: number;
+  predicted_bike_parking: number;
+  predicted_rooms: number;
+  food_estimate: number;
   actual: {
     total_guests: number;
+    checked_in_guests: number;
+    remaining_guests: number;
+    real_present_count: number;
     total_people: number;
     total_car_parking: number;
     total_bike_parking: number;
@@ -31,6 +50,8 @@ interface DashboardData {
     safety_bike_parking: number;
     safety_total_rooms: number;
   };
+  parking_guests: RoomNeededGuest[];
+  rooms_needed_guests: RoomNeededGuest[];
   car_parking_guests: GuestListItem[];
   bike_parking_guests: GuestListItem[];
   room_guests: GuestListItem[];
@@ -39,6 +60,7 @@ interface DashboardData {
 interface EventMeta {
   event_name: string;
   event_date: string | null;
+  event_token: string | null;
 }
 
 interface SosAlert {
@@ -108,6 +130,7 @@ export default function OrganizerDashboard() {
           setEventMeta({
             event_name: firstEvent.event_name,
             event_date: firstEvent.event_date || null,
+            event_token: firstEvent.event_token || null,
           });
         }
 
@@ -173,9 +196,9 @@ export default function OrganizerDashboard() {
   const statCards = dashboard
     ? [
         { label: 'Total Guests', value: dashboard.actual.total_guests, icon: 'TG' },
-        { label: 'Total People', value: dashboard.actual.total_people, icon: 'TP' },
-        { label: 'Car Parking', value: dashboard.actual.total_car_parking, icon: 'CP' },
-        { label: 'Bike Parking', value: dashboard.actual.total_bike_parking, icon: 'BP' },
+        { label: 'Checked In', value: dashboard.actual.checked_in_guests, icon: 'CI' },
+        { label: 'Remaining', value: dashboard.actual.remaining_guests, icon: 'RM' },
+        { label: 'Real Present', value: dashboard.actual.real_present_count, icon: 'RP' },
       ]
     : [];
 
@@ -235,9 +258,17 @@ export default function OrganizerDashboard() {
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-[var(--text-soft)]">Organizer Dashboard</p>
             <h1 className="mt-3 font-serif text-4xl text-[var(--text-dark)] sm:text-5xl">
-              {eventMeta?.event_name || 'Wedding Event'}
+              {eventMeta?.event_name || 'Event'}
             </h1>
             <p className="mt-3 text-[var(--text-soft)]">{formatDate(eventMeta?.event_date)}</p>
+            {eventMeta?.event_token && (
+              <button
+                onClick={() => router.push(`/entrance/${eventMeta.event_token}`)}
+                className="gold-button mt-5"
+              >
+                Open Entrance Scanner
+              </button>
+            )}
           </div>
           {dashboard.qr_code_url && (
             <img
@@ -316,10 +347,65 @@ export default function OrganizerDashboard() {
         </div>
       </section>
 
+      <section className="section-fade premium-card">
+        <h2 className="font-serif text-3xl">ML Attendance Forecast (XGBoost)</h2>
+        <p className="mb-6 mt-2 text-sm text-[var(--text-soft)]">Predicted operational requirements based on RSVP behavior.</p>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            ['Expected Guests', dashboard.expected_guests],
+            ['Predicted Attendance', dashboard.predicted_attendance],
+            ['Car Parking Needed', dashboard.predicted_car_parking],
+            ['Bike Parking Needed', dashboard.predicted_bike_parking],
+            ['Rooms Required', dashboard.predicted_rooms],
+            ['Food Preparation Estimate', dashboard.food_estimate],
+          ].map(([label, value]) => (
+            <div
+              key={String(label)}
+              className="rounded-2xl border border-[#C6A75E]/20 bg-[#fffdf8] p-5 shadow-md transition-all duration-300 hover:shadow-lg"
+            >
+              <p className="text-sm text-[var(--text-soft)]">{label}</p>
+              <p className="mt-2 font-serif text-3xl text-[var(--primary)]">{value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {renderTable('Car Parking Guests', dashboard.car_parking_guests)}
         {renderTable('Bike Parking Guests', dashboard.bike_parking_guests)}
       </section>
+
+      <section className="rounded-xl shadow-md border p-4 section-fade">
+        <h3 className="mb-4 font-serif text-2xl">Guests Needing Rooms</h3>
+        {dashboard.rooms_needed_guests.length === 0 ? (
+          <p className="text-[var(--text-soft)]">No guests requested rooms.</p>
+        ) : (
+          <div className="max-h-[300px] overflow-y-auto rounded-xl border">
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 bg-[#fffdf8]">
+                <tr className="border-b border-[rgba(198,167,94,0.25)] text-sm text-[var(--text-soft)]">
+                  <th className="py-3 px-3">Name</th>
+                  <th className="py-3 px-3">Phone</th>
+                  <th className="py-3 px-3">People</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.rooms_needed_guests.map((guest, idx) => (
+                  <tr
+                    key={`${guest.phone}-${idx}`}
+                    className={`${idx % 2 === 0 ? 'bg-[#fbf8f2]' : 'bg-white'} border-b border-[rgba(198,167,94,0.15)]`}
+                  >
+                    <td className="py-3 px-3">{guest.name}</td>
+                    <td className="py-3 px-3">{guest.phone}</td>
+                    <td className="py-3 px-3">{guest.number_of_people}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
+

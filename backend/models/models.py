@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String
@@ -61,6 +61,8 @@ class Guest(Base):
 
     parking_type = Column(String, nullable=True)  # None / Car / Bike
     needs_room = Column(String, nullable=True)      # YES / NO
+    guest_qr_token = Column(String, unique=True, index=True, nullable=True)
+    guest_qr_code_url = Column(String, nullable=True)
 
     event = relationship("Event", back_populates="guests")
     attendance = relationship("Attendance", back_populates="guest")
@@ -69,6 +71,9 @@ class Guest(Base):
 
 class Attendance(Base):
     __tablename__ = "attendance"
+    __table_args__ = (
+        UniqueConstraint("guest_id", name="uq_attendance_guest_id"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey("events.id"))
     guest_id = Column(Integer, ForeignKey("guests.id"))

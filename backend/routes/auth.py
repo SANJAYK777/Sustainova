@@ -31,6 +31,8 @@ def register_organizer(
     bus_routes: str = Form(...),
     bus_stops: str = Form(...),
     expected_count: int = Form(...),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
     invitation_image: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 ):
@@ -83,6 +85,8 @@ def register_organizer(
         bus_routes=bus_routes,
         bus_stops=bus_stops,
         expected_count=expected_count,
+        latitude=latitude,
+        longitude=longitude,
         invitation_image=image_path,
         invitation_image_url=None,
     )

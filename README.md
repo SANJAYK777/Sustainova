@@ -1,8 +1,8 @@
-# SustainaWed – AI Powered Sustainable Wedding Management System
+﻿# Eventify â€“ AI Powered Sustainable Event Management System
 
-This repository contains a full-stack application designed to reduce food waste and optimize logistics for weddings using machine learning.
+This repository contains a full-stack application designed to reduce food waste and optimize logistics for events using machine learning.
 
-## 🚀 Features
+## ðŸš€ Features
 
 - Organizer registration with JWT authentication
 - Event creation and QR code generation
@@ -12,7 +12,7 @@ This repository contains a full-stack application designed to reduce food waste 
 - Sustainability analytics dashboard
 - Dockerized backend, frontend, PostgreSQL, and Redis
 
-## 🛠️ Technology Stack
+## ðŸ› ï¸ Technology Stack
 
 **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS, Chart.js, Axios
 
@@ -24,38 +24,38 @@ This repository contains a full-stack application designed to reduce food waste 
 
 **DevOps**: Docker, docker-compose, environment variables
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
-sustainawed/
-│
-├── backend/
-│   ├── main.py
-│   ├── database.py
-│   ├── config.py
-│   ├── requirements.txt
-│   ├── models/
-│   ├── schemas/
-│   ├── routes/
-│   ├── ml/
-│   ├── utils/
-│   └── Dockerfile
-│
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   ├── services/
-│   ├── package.json
-│   ├── tailwind.config.js
-│   └── Dockerfile
-│
-├── docker-compose.yml
-├── .env.example
-├── setup.sh
-└── README.md
+eventify/
+â”‚
+â”œâ”€â”€ backend/
+â”‚   â”œâ”€â”€ main.py
+â”‚   â”œâ”€â”€ database.py
+â”‚   â”œâ”€â”€ config.py
+â”‚   â”œâ”€â”€ requirements.txt
+â”‚   â”œâ”€â”€ models/
+â”‚   â”œâ”€â”€ schemas/
+â”‚   â”œâ”€â”€ routes/
+â”‚   â”œâ”€â”€ ml/
+â”‚   â”œâ”€â”€ utils/
+â”‚   â””â”€â”€ Dockerfile
+â”‚
+â”œâ”€â”€ frontend/
+â”‚   â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ components/
+â”‚   â”œâ”€â”€ services/
+â”‚   â”œâ”€â”€ package.json
+â”‚   â”œâ”€â”€ tailwind.config.js
+â”‚   â””â”€â”€ Dockerfile
+â”‚
+â”œâ”€â”€ docker-compose.yml
+â”œâ”€â”€ .env.example
+â”œâ”€â”€ setup.sh
+â””â”€â”€ README.md
 ```
 
-## 📦 Getting Started
+## ðŸ“¦ Getting Started
 
 ### With Docker
 
@@ -74,7 +74,7 @@ sustainawed/
    python -m venv venv
    source venv/bin/activate   # or venv\Scripts\activate on Windows
    pip install -r backend/requirements.txt
-   export DATABASE_URL="postgresql://user:pass@localhost:5432/sustainawed"  # or use .env
+   export DATABASE_URL="postgresql://user:pass@localhost:5432/eventify"  # or use .env
    cd backend && uvicorn main:app --reload
    ```
 
@@ -94,7 +94,7 @@ model.train_sample_models()
 PY
    ```
 
-## 🧪 Testing with Sample Data
+## ðŸ§ª Testing with Sample Data
 
 A helper script creates an organizer, an event and guests:
 
@@ -113,20 +113,21 @@ curl -X POST "http://localhost:8000/predict/attendance" -H "Content-Type: applic
 # retrain model
 curl -X POST "http://localhost:8000/retrain/model"
 ```
-## 🔐 Security Notes
+## ðŸ” Security Notes
 
 - Passwords are hashed using bcrypt
 - JWT is used for authentication
 - Environment variables are used for all secrets
 
-## ☁️ Deployment
+## â˜ï¸ Deployment
 
 The application is cloud-ready and compatible with AWS EC2, RDS, and S3. Avoid hardcoded secrets; use environment variables.
 
-## ✨ Contributions
+## âœ¨ Contributions
 
-This is a starter scaffold for SustainaWed. Feel free to extend features, improve ML models, and add UI components.
+This is a starter scaffold for Eventify. Feel free to extend features, improve ML models, and add UI components.
 
 ---
 
-Made with ❤️ by SustainaWed AI team
+Made with â¤ï¸ by Eventify AI team
+

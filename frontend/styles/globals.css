@@ -11,6 +11,8 @@
   --gold-dark: #A88B4C;
   --text-dark: #1C1C1C;
   --text-soft: #6B7280;
+  --font-inter: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-playfair: Georgia, "Times New Roman", serif;
 }
 
 * {

@@ -11,6 +11,10 @@ qrcode[pil]
 Pillow
 email-validator
 bcrypt==4.0.1
-redis
 twilio
 python-multipart
+xgboost==1.7.6
+scikit-learn
+pandas
+numpy
+joblib

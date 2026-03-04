@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 
 export default function Home() {
   return (
@@ -7,12 +7,12 @@ export default function Home() {
 
       <div className="mx-auto max-w-7xl px-6 sm:px-10">
         <div className="premium-card border border-[#C6A75E]/25 bg-white/85 text-center">
-          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">SustainaWed</p>
+          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">Eventify</p>
           <h1 className="mx-auto mt-6 max-w-4xl font-serif text-5xl leading-tight text-[var(--text-dark)] sm:text-6xl">
-            Make your Wedding Sustainable
+            sustainability meets celebration
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-[var(--text-soft)]">
-            Elegant planning for modern weddings with guest logistics, SOS alerts, invitation workflows, and smart organization in one platform.
+            Elegant planning for modern events with guest logistics, SOS alerts, invitation workflows, and smart organization in one platform.
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
@@ -56,3 +56,4 @@ export default function Home() {
     </section>
   );
 }
+

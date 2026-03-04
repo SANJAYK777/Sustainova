@@ -9,6 +9,7 @@ from schemas.schemas import GuestCreate, GuestOut, GuestRSVPCreate
 from dependencies.auth import require_role
 from utils.security import get_password_hash
 from utils.phone import normalize_phone
+from utils.qr import generate_guest_qr
 
 router = APIRouter(prefix="/guests", tags=["guests"])
 logger = logging.getLogger(__name__)
@@ -73,8 +74,11 @@ def add_guest(
         transport_type=guest.transport_type,
         parking_type=parking_clean,
         needs_room=guest.needs_room,
-        event_id=guest.event_id
+        event_id=guest.event_id,
+        guest_qr_token=str(uuid4())
     )
+
+    new_guest.guest_qr_code_url = generate_guest_qr(new_guest.guest_qr_token)
 
     db.add(new_guest)
     try:
@@ -146,8 +150,11 @@ def add_guest_rsvp(
         transport_type=guest.transport_type,
         parking_type=parking_clean,
         needs_room=guest.needs_room,
-        event_id=event.id
+        event_id=event.id,
+        guest_qr_token=str(uuid4())
     )
+
+    new_guest.guest_qr_code_url = generate_guest_qr(new_guest.guest_qr_token)
 
     db.add(new_guest)
     try:

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -39,7 +39,7 @@ export default function LoginPage() {
       <section className="premium-card hover:-translate-y-2 transition-all duration-300 w-full max-w-xl text-center">
         <h1 className="font-serif text-5xl">Cherish Your Celebration</h1>
         <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent mx-auto my-6" />
-        <p className="text-[var(--text-soft)] mb-8">Sign in with OTP to continue managing your wedding moments.</p>
+        <p className="text-[var(--text-soft)] mb-8">Sign in with OTP to continue managing your event moments.</p>
 
         <form onSubmit={submit} className="space-y-4 text-left">
           <input
@@ -70,3 +70,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

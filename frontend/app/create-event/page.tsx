@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AxiosError } from 'axios';
 import { useState, useEffect } from 'react';
@@ -37,7 +37,7 @@ export default function CreateEvent() {
   });
 
   const [qr, setQr] = useState('');
-  const [weddingId, setWeddingId] = useState('');
+  const [eventId, setEventId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -76,8 +76,8 @@ export default function CreateEvent() {
       });
 
       setQr(res.data.qr_code_url);
-      setWeddingId(`WED-${new Date().getFullYear()}-${res.data.id}`);
-      showToast('Wedding event created successfully', 'success');
+      setEventId(`EVT-${new Date().getFullYear()}-${res.data.id}`);
+      showToast('Event created successfully', 'success');
     } catch (err) {
       const apiErr = err as AxiosError<ApiError>;
       setError(apiErr.response?.data?.detail || 'Unable to create event.');
@@ -90,13 +90,13 @@ export default function CreateEvent() {
     <main className="min-h-[80vh] flex items-center justify-center px-6 py-8">
       <section className="premium-card hover:-translate-y-2 transition-all duration-300 w-full max-w-3xl">
         <div className="text-center mb-8">
-          <h1 className="font-serif text-5xl">Create Your Wedding</h1>
+          <h1 className="font-serif text-5xl">Create Your Event</h1>
           <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent mx-auto my-6" />
           <p className="text-[var(--text-soft)]">Craft your event details and generate your premium invitation QR.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
-          <input name="event_name" value={form.event_name} onChange={handleChange} required className="premium-input" placeholder="Wedding Name" />
+          <input name="event_name" value={form.event_name} onChange={handleChange} required className="premium-input" placeholder="Event Name" />
           <input name="location" value={form.location} onChange={handleChange} required className="premium-input" placeholder="Location" />
 
           <div className="grid md:grid-cols-2 gap-4">
@@ -109,18 +109,19 @@ export default function CreateEvent() {
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <button type="submit" disabled={loading} className="gold-button w-full disabled:opacity-60">
-            {loading ? 'Creating...' : 'Create Wedding Event'}
+            {loading ? 'Creating...' : 'Create Event'}
           </button>
         </form>
 
         {qr && (
           <div className="mt-10 text-center border-t border-[rgba(198,167,94,0.2)] pt-8">
             <h2 className="font-serif text-3xl mb-3">Your Invitation QR</h2>
-            <p className="text-sm text-[var(--text-soft)] mb-5">Wedding ID: <span className="font-semibold">{weddingId}</span></p>
-            <img src={qr} alt="Wedding QR" className="h-56 w-56 rounded-3xl border border-[rgba(198,167,94,0.25)] mx-auto" />
+            <p className="text-sm text-[var(--text-soft)] mb-5">Event ID: <span className="font-semibold">{eventId}</span></p>
+            <img src={qr} alt="Event QR" className="h-56 w-56 rounded-3xl border border-[rgba(198,167,94,0.25)] mx-auto" />
           </div>
         )}
       </section>
     </main>
   );
 }
+
