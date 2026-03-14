@@ -9,15 +9,11 @@ import joblib
 import pandas as pd
 
 from ml.trainer import FEATURE_COLUMNS, DATASET_PATH, MODEL_PATH, train_model
-from ml.dataset_generator import save_dataset
 
 
 def ensure_model_exists() -> Path:
     if MODEL_PATH.exists():
         return MODEL_PATH
-
-    if not DATASET_PATH.exists():
-        save_dataset(path=DATASET_PATH, rows=1200, seed=42)
 
     train_model(dataset_path=DATASET_PATH, model_path=MODEL_PATH)
     return MODEL_PATH
@@ -139,4 +135,3 @@ def predict_event_resources(guests: Iterable, event_date: datetime | None, weath
         "predicted_rooms": predicted_rooms,
         "food_estimate": food_estimate,
     }
-

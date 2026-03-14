@@ -57,10 +57,14 @@ class Guest(Base):
     phone = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=True)  # OTP-only login, no password required
     number_of_people = Column(Integer, default=1)
+    coming_from = Column(String, nullable=True)
     transport_type = Column(String, nullable=True)
 
     parking_type = Column(String, nullable=True)  # None / Car / Bike
+    vehicle_number = Column(String, nullable=True)
     needs_room = Column(String, nullable=True)      # YES / NO
+    aadhar_number = Column(String(12), nullable=True)
+    room_type = Column(String, nullable=True)
     guest_qr_token = Column(String, unique=True, index=True, nullable=True)
     guest_qr_code_url = Column(String, nullable=True)
 

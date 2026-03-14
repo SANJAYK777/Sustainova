@@ -12,11 +12,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 import xgboost as xgb
 
-from ml.dataset_generator import save_dataset
-
-
 BASE_DIR = Path(__file__).resolve().parent
-DATASET_PATH = BASE_DIR / "dataset" / "guest_dataset.csv"
+PROJECT_ROOT = BASE_DIR.parent.parent
+DATASET_PATH = PROJECT_ROOT / "data" / "guest_dataset.csv"
 MODEL_PATH = BASE_DIR / "xgb_model.pkl"
 
 FEATURE_COLUMNS = [
@@ -33,11 +31,21 @@ CATEGORICAL_COLUMNS = ["transport_type", "parking_required", "room_required", "d
 NUMERIC_COLUMNS = ["group_size", "distance_km"]
 
 
-def train_model(dataset_path: Path = DATASET_PATH, model_path: Path = MODEL_PATH) -> dict[str, float]:
+def _load_training_dataset(dataset_path: Path) -> pd.DataFrame:
     if not dataset_path.exists():
-        save_dataset(path=dataset_path, rows=1200, seed=42)
+        raise FileNotFoundError(f"Training dataset not found: {dataset_path}")
 
     df = pd.read_csv(dataset_path)
+    required_columns = set(FEATURE_COLUMNS + [TARGET_COLUMN])
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise ValueError(f"Dataset is missing required columns: {missing_columns}")
+
+    return df
+
+
+def train_model(dataset_path: Path = DATASET_PATH, model_path: Path = MODEL_PATH) -> dict[str, float]:
+    df = _load_training_dataset(dataset_path)
     x = df[FEATURE_COLUMNS]
     y = df[TARGET_COLUMN]
 
@@ -89,4 +97,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -58,6 +58,14 @@ def ensure_runtime_schema():
             statements.append("ALTER TABLE guests ADD COLUMN guest_qr_token VARCHAR")
         if "guest_qr_code_url" not in existing_guest_columns:
             statements.append("ALTER TABLE guests ADD COLUMN guest_qr_code_url VARCHAR")
+        if "coming_from" not in existing_guest_columns:
+            statements.append("ALTER TABLE guests ADD COLUMN coming_from TEXT")
+        if "vehicle_number" not in existing_guest_columns:
+            statements.append("ALTER TABLE guests ADD COLUMN vehicle_number TEXT")
+        if "aadhar_number" not in existing_guest_columns:
+            statements.append("ALTER TABLE guests ADD COLUMN aadhar_number VARCHAR(12)")
+        if "room_type" not in existing_guest_columns:
+            statements.append("ALTER TABLE guests ADD COLUMN room_type TEXT")
 
         if statements:
             with engine.begin() as connection:

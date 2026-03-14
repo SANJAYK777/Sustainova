@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   description: "Sustainability Meets Celebration",
   icons: {
     icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
   },
 };
 

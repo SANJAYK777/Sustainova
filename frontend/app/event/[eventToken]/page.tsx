@@ -15,21 +15,27 @@ export default function GuestPage() {
     name: '',
     phone: '',
     number_of_people: 1,
+    coming_from: '',
     transport_type: '',
     parking_type: 'None',
+    vehicle_number: '',
     needs_room: 'No',
+    aadhar_number: '',
+    room_type: '',
   });
 
   const [status, setStatus] = useState('');
   const [guestQrCodeUrl, setGuestQrCodeUrl] = useState('');
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
       [name]:
         name === 'number_of_people'
           ? Number(value)
+          : name === 'aadhar_number'
+            ? value.replace(/\D/g, '').slice(0, 12)
           : name === 'phone'
             ? formatPhoneForInput(value)
             : value,
@@ -37,7 +43,15 @@ export default function GuestPage() {
   };
 
   const setSelectValue = (name: 'transport_type' | 'parking_type' | 'needs_room', value: string) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === 'parking_type' && value === 'None') {
+        return { ...prev, [name]: value, vehicle_number: '' };
+      }
+      if (name === 'needs_room' && value === 'No') {
+        return { ...prev, [name]: value, aadhar_number: '', room_type: '' };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const submit = async (e: any) => {
@@ -63,9 +77,13 @@ export default function GuestPage() {
         name: '',
         phone: '',
         number_of_people: 1,
+        coming_from: '',
         transport_type: '',
         parking_type: 'None',
+        vehicle_number: '',
         needs_room: 'No',
+        aadhar_number: '',
+        room_type: '',
       });
     } catch (err: unknown) {
       const apiErr = err as AxiosError<{ detail?: string }>;
@@ -83,6 +101,13 @@ export default function GuestPage() {
           <input name="name" value={form.name} placeholder="Your Name" required onChange={handleChange} className="premium-input" />
           <input name="phone" value={form.phone} placeholder="Phone Number" required onChange={handleChange} inputMode="numeric" maxLength={11} className="premium-input" />
           <input name="number_of_people" type="number" min={1} value={form.number_of_people} placeholder="Total Members" required onChange={handleChange} className="premium-input" />
+          <input
+            name="coming_from"
+            value={form.coming_from}
+            placeholder="Enter the city or location you are coming from"
+            onChange={handleChange}
+            className="premium-input"
+          />
 
           <LuxurySelect
             value={form.transport_type}
@@ -125,6 +150,16 @@ export default function GuestPage() {
             </div>
           </div>
 
+          {form.parking_type !== 'None' && (
+            <input
+              name="vehicle_number"
+              value={form.vehicle_number}
+              placeholder="Enter Vehicle Number (e.g., TN10AB1234)"
+              onChange={handleChange}
+              className="premium-input"
+            />
+          )}
+
           <div className="space-y-2">
             <h3 className="font-semibold text-lg text-[#1F4F46]">Do you need accommodation (room)?</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -153,6 +188,31 @@ export default function GuestPage() {
               ))}
             </div>
           </div>
+
+          {form.needs_room === 'Yes' && (
+            <div className="space-y-4">
+              <input
+                name="aadhar_number"
+                value={form.aadhar_number}
+                placeholder="Enter Aadhar Number"
+                onChange={handleChange}
+                inputMode="numeric"
+                maxLength={12}
+                className="premium-input"
+              />
+              <select
+                name="room_type"
+                value={form.room_type}
+                onChange={handleChange}
+                className="premium-input"
+              >
+                <option value="">Select Room Type</option>
+                <option value="Single Bed">Single Bed</option>
+                <option value="Double Bed">Double Bed</option>
+                <option value="Triple Bed">Triple Bed</option>
+              </select>
+            </div>
+          )}
 
           <button className="gold-button w-full">Submit RSVP</button>
         </form>

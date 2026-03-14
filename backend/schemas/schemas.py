@@ -88,9 +88,13 @@ class GuestCreate(BaseModel):
     name: str
     phone: str
     number_of_people: int = 1
+    coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: Optional[str] = "None"
+    vehicle_number: Optional[str] = None
     needs_room: Optional[str] = None
+    aadhar_number: Optional[str] = None
+    room_type: Optional[str] = None
     event_id: int
 
 
@@ -98,9 +102,13 @@ class GuestRSVPCreate(BaseModel):
     name: str
     phone: str
     number_of_people: int = 1
+    coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: Optional[str] = "None"
+    vehicle_number: Optional[str] = None
     needs_room: Optional[str] = None
+    aadhar_number: Optional[str] = None
+    room_type: Optional[str] = None
     event_token: str
 
 
@@ -110,9 +118,13 @@ class GuestOut(BaseModel):
     name: str
     phone: str
     number_of_people: int
+    coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: str
+    vehicle_number: Optional[str] = None
     needs_room: Optional[str] = None
+    aadhar_number: Optional[str] = None
+    room_type: Optional[str] = None
     guest_qr_token: Optional[str] = None
     guest_qr_code_url: Optional[str] = None
 

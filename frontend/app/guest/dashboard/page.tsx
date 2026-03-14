@@ -30,6 +30,7 @@ export default function GuestDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showSosConfirm, setShowSosConfirm] = useState(false);
+  const [countdownText, setCountdownText] = useState('');
 
   const goLogin = () => {
     router.push('/login');
@@ -79,6 +80,38 @@ export default function GuestDashboard() {
 
     fetchDashboard();
   }, [authLoading, token, showToast]);
+
+  useEffect(() => {
+    if (!event?.event_date) {
+      setCountdownText('');
+      return;
+    }
+
+    const eventDate = new Date(event.event_date);
+
+    const updateCountdown = () => {
+      const now = new Date();
+      const diff = eventDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setCountdownText('Wedding is happening now!');
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / (24 * 60 * 60));
+      const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+      const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+      const seconds = totalSeconds % 60;
+
+      setCountdownText(`${days} Days ${hours} Hours ${minutes} Minutes ${seconds} Seconds`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [event?.event_date]);
 
   if (authLoading) return null;
 
@@ -156,14 +189,23 @@ export default function GuestDashboard() {
         </section>
 
         {event.guest_qr_code_url && (
-          <section className={hasInviteBackground ? 'premium-card text-center bg-white/85 backdrop-blur-md' : 'premium-card text-center'}>
-            <h3 className="font-serif text-2xl mb-2">Your Check-In QR</h3>
+          <section className="rounded-2xl shadow-xl p-6 bg-white text-center">
+            <h3 className="font-serif text-2xl mb-2">Your Check-In QR Code</h3>
             <p className="text-[var(--text-soft)] mb-5">Show this at the entrance for fast check-in.</p>
-            <img
-              src={event.guest_qr_code_url}
-              alt="Guest check-in QR"
-              className="mx-auto h-52 w-52 rounded-2xl border border-[#C6A75E]/30 bg-white p-2 shadow-md"
-            />
+            <div className="text-center">
+              <img
+                src={event.guest_qr_code_url}
+                alt="Guest check-in QR"
+                className="w-48 h-48 mx-auto rounded-2xl border border-[#C6A75E]/30 bg-white p-2"
+              />
+              <a
+                href={event.guest_qr_code_url}
+                download="guest_checkin_qr.png"
+                className="mt-4 inline-block bg-emerald-600 text-white px-5 py-2 rounded-xl hover:bg-emerald-700 transition"
+              >
+                Download Check-In QR
+              </a>
+            </div>
           </section>
         )}
 
@@ -179,6 +221,13 @@ export default function GuestDashboard() {
             </button>
           )}
         </section>
+
+        {event.event_date && (
+          <section className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl p-6 shadow-lg text-center">
+            <h3 className="font-serif text-3xl mb-2">Wedding starts in:</h3>
+            <p className="text-lg">{countdownText}</p>
+          </section>
+        )}
 
         <section className={hasInviteBackground ? 'premium-card bg-white/85 backdrop-blur-md' : 'premium-card'}>
           <div className="flex flex-wrap items-center justify-between gap-3">
