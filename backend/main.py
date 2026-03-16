@@ -47,5 +47,10 @@ app.include_router(rooms.router)
 @app.get("/")
 def root():
     return {"message": "Sustainova API"}
+if __name__ == "__main__":
+    import uvicorn
+    import os
 
+    port = int(os.environ.get("PORT", 8000))  # Render automatically sets PORT
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
 
