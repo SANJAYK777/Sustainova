@@ -21,7 +21,7 @@ def load_external_dataset(dataset_path: Path = DATASET_PATH) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate and load external Eventify dataset CSV.")
+    parser = argparse.ArgumentParser(description="Validate and load external Sustainova dataset CSV.")
     parser.add_argument("--dataset", type=str, default=str(DATASET_PATH))
     args = parser.parse_args()
 
@@ -32,3 +32,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

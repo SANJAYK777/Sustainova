@@ -87,7 +87,7 @@ export default function CreateEvent() {
   };
 
   return (
-    <main className="min-h-[80vh] flex items-center justify-center px-6 py-8">
+    <main className="min-h-[80vh] flex items-center justify-center px-4 py-8">
       <section className="premium-card hover:-translate-y-2 transition-all duration-300 w-full max-w-3xl">
         <div className="text-center mb-8">
           <h1 className="font-serif text-5xl">Create Your Event</h1>
@@ -95,16 +95,31 @@ export default function CreateEvent() {
           <p className="text-[var(--text-soft)]">Craft your event details and generate your premium invitation QR.</p>
         </div>
 
-        <form onSubmit={submit} className="space-y-4">
-          <input name="event_name" value={form.event_name} onChange={handleChange} required className="premium-input" placeholder="Event Name" />
-          <input name="location" value={form.location} onChange={handleChange} required className="premium-input" placeholder="Location" />
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <input type="datetime-local" name="event_date" value={form.event_date} onChange={handleChange} required className="premium-input" />
-            <input type="number" name="expected_count" value={form.expected_count} onChange={handleChange} required className="premium-input" placeholder="Expected Guests" />
+        <form onSubmit={submit} className="form-stack">
+          <div>
+            <label className="form-label">Event Name</label>
+            <input name="event_name" value={form.event_name} onChange={handleChange} required className="premium-input" placeholder="Event Name" />
+          </div>
+          <div>
+            <label className="form-label">Location</label>
+            <input name="location" value={form.location} onChange={handleChange} required className="premium-input" placeholder="Location" />
           </div>
 
-          <input type="file" accept="image/*" onChange={handleFile} className="premium-input" />
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Event Date & Time</label>
+              <input type="datetime-local" name="event_date" value={form.event_date} onChange={handleChange} required className="premium-input" />
+            </div>
+            <div>
+              <label className="form-label">Expected Guests</label>
+              <input type="number" name="expected_count" value={form.expected_count} onChange={handleChange} required className="premium-input" placeholder="Expected Guests" />
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">Invitation Image</label>
+            <input type="file" accept="image/*" onChange={handleFile} className="premium-input" />
+          </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
 

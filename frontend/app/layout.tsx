@@ -5,10 +5,12 @@ import { ToastProvider } from "../components/ToastContext";
 import { AuthProvider } from "../context/AuthContext";
 
 export const metadata: Metadata = {
-  title: "Eventify",
-  description: "Sustainability Meets Celebration",
+  title: "Sustainova – Sustainable Event Management System",
+  description: "Sustainova – Sustainable Event Management System",
   icons: {
     icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 
@@ -25,3 +27,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+

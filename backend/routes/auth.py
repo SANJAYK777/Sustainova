@@ -17,6 +17,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+DEV_OTP_LOG = os.getenv("DEV_OTP_LOG", "1") == "1"
+DEV_OTP_IN_RESPONSE = os.getenv("DEV_OTP_IN_RESPONSE", "0") == "1"
 
 
 @router.post("/register")
@@ -116,9 +118,13 @@ def request_otp(data: OTPRequest, db: Session = Depends(get_db)):
 
     otp = generate_otp()
     store_otp(phone_clean, otp)
-    print(f"DEV OTP for {phone_clean}: {otp}")
+    if DEV_OTP_LOG:
+        print(f"DEV OTP for {phone_clean}: {otp}")
 
-    return {"message": "OTP sent successfully", "dev_otp": otp}
+    response = {"message": "OTP sent successfully"}
+    if DEV_OTP_IN_RESPONSE:
+        response["dev_otp"] = otp
+    return response
 
 
 @router.post("/verify-otp")

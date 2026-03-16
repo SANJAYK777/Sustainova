@@ -10,10 +10,10 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[#0B0F14]/95 border-b border-[#C6A75E]/35">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="inline-flex items-center" aria-label="Eventify Home">
+        <Link href="/" className="inline-flex items-center" aria-label="Sustainova Home">
           <Image
-            src="/logo-navbar.png"
-            alt="Eventify"
+            src="/Sustainova_logo.jpeg"
+            alt="Sustainova"
             width={980}
             height={700}
             quality={100}
@@ -81,3 +81,4 @@ export default function Navbar() {
     </header>
   );
 }
+

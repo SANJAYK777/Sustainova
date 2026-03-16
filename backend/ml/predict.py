@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import math
+import os
+import logging
+import time
 from pathlib import Path
 from typing import Iterable
 
 import joblib
 import pandas as pd
+import xgboost as xgb
 
-from ml.trainer import FEATURE_COLUMNS, DATASET_PATH, MODEL_PATH, train_model
+from ml.trainer import FEATURE_COLUMNS, DATASET_PATH, MODEL_PATH, MODEL_META_PATH, train_model
+
+logger = logging.getLogger(__name__)
+ML_DEBUG = os.getenv("ML_DEBUG", "0") == "1"
+RETRAIN_COOLDOWN_SECONDS = int(os.getenv("ML_RETRAIN_COOLDOWN_SECONDS", "300"))
+
+LAST_RETRAIN_AT = 0.0
+LAST_RETRAIN_ERROR: Exception | None = None
 
 
 def ensure_model_exists() -> Path:
@@ -21,8 +33,14 @@ def ensure_model_exists() -> Path:
 
 def _load_model():
     model_path = ensure_model_exists()
-    model = joblib.load(model_path)
-    print("ML model loaded")
+    try:
+        model = joblib.load(model_path)
+    except Exception as exc:
+        logger.warning("ML model load failed, retraining model: %s", exc)
+        train_model(dataset_path=DATASET_PATH, model_path=model_path)
+        model = joblib.load(model_path)
+
+    logger.info("ML model loaded")
     return model
 
 
@@ -32,16 +50,70 @@ MODEL = None
 def _get_model():
     global MODEL
     if MODEL is None:
+        if _model_needs_retrain():
+            _retrain_and_reload_model()
         MODEL = _load_model()
     return MODEL
 
 
+def _retrain_and_reload_model():
+    global MODEL
+    global LAST_RETRAIN_AT
+    global LAST_RETRAIN_ERROR
+    now = time.time()
+    if (now - LAST_RETRAIN_AT) < RETRAIN_COOLDOWN_SECONDS:
+        raise RuntimeError(
+            f"ML retrain skipped due to cooldown. Last error: {LAST_RETRAIN_ERROR}"
+        )
+    logger.warning("Rebuilding ML model due to incompatible serialized artifact")
+    LAST_RETRAIN_AT = now
+    try:
+        train_model(dataset_path=DATASET_PATH, model_path=MODEL_PATH)
+        MODEL = _load_model()
+        LAST_RETRAIN_ERROR = None
+        return MODEL
+    except Exception as exc:
+        LAST_RETRAIN_ERROR = exc
+        logger.warning("ML retrain failed: %s", exc)
+        raise
+
+
+def _read_model_meta() -> dict | None:
+    if not MODEL_META_PATH.exists():
+        return None
+    try:
+        return json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to read model metadata: %s", exc)
+        return None
+
+
+def _model_needs_retrain() -> bool:
+    meta = _read_model_meta()
+    if not meta:
+        return False
+    return meta.get("xgboost_version") != xgb.__version__
+
+
 def predict_attendance(data: dict) -> int:
-    print("Prediction input:", data)
+    if ML_DEBUG:
+        logger.info("Prediction input: %s", data)
     model = _get_model()
     df = pd.DataFrame([data])
-    prediction = model.predict(df)
-    print("Prediction output:", prediction)
+    try:
+        prediction = model.predict(df)
+    except Exception as exc:
+        # Handles cross-version xgboost pickle issues (e.g. missing gpu_id attr).
+        logger.warning("ML predict failed, retrying with rebuilt model: %s", exc)
+        try:
+            model = _retrain_and_reload_model()
+            prediction = model.predict(df)
+        except Exception as retrain_exc:
+            logger.warning("ML prediction fallback used after retrain failure: %s", retrain_exc)
+            fallback = max(0, int(data.get("group_size", 0) or 0))
+            return fallback
+    if ML_DEBUG:
+        logger.info("Prediction output: %s", prediction)
     return int(max(0, round(float(prediction[0]))))
 
 

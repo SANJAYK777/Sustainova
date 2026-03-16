@@ -2,6 +2,7 @@
 
 import { AxiosError } from 'axios';
 import { useState } from 'react';
+import Image from 'next/image';
 import api from '../../services/api';
 import { useToast } from '../../components/ToastContext';
 import { formatPhoneForInput, normalizePhone } from '../../services/phone';
@@ -129,15 +130,23 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-[80vh] flex items-center justify-center px-6 py-8">
+    <main className="min-h-[80vh] flex items-center justify-center px-4 py-8">
       <section className="form-shell w-full max-w-4xl">
         <div className="text-center mb-8">
+          <Image
+            src="/Sustainova_logo.jpeg"
+            alt="Sustainova logo"
+            width={200}
+            height={200}
+            priority
+            className="mx-auto h-24 w-auto"
+          />
           <h1 className="font-serif text-5xl">Cherish Your Celebration</h1>
           <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent mx-auto my-6" />
           <p className="text-[var(--text-soft)]">Create your premium event experience.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="form-stack">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="form-label">Organizer Name</label>

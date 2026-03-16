@@ -1,5 +1,5 @@
-﻿#!/bin/bash
-# Auto installation script for Eventify
+#!/bin/bash
+# Auto installation script for Sustainova
 set -e
 
 echo "Creating Python virtual environment..."
@@ -32,4 +32,5 @@ echo "  (1) Activate virtualenv: source venv/bin/activate"
 echo "  (2) Run backend: uvicorn backend.main:app --reload"
 echo "  (3) Run frontend: cd frontend && npm run dev"
 echo "Or use docker-compose up --build"
+
 

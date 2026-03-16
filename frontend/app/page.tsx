@@ -1,4 +1,5 @@
-﻿import Link from "next/link";
+import Link from "next/link";
+import Image from "next/image";
 
 export default function Home() {
   return (
@@ -7,9 +8,17 @@ export default function Home() {
 
       <div className="mx-auto max-w-7xl px-6 sm:px-10">
         <div className="premium-card border border-[#C6A75E]/25 bg-white/85 text-center">
-          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">Eventify</p>
+          <Image
+            src="/Sustainova_logo.jpeg"
+            alt="Sustainova logo"
+            width={220}
+            height={220}
+            priority
+            className="mx-auto h-24 w-auto sm:h-28"
+          />
+          <p className="text-sm uppercase tracking-[0.25em] text-[var(--text-soft)]">Sustainova</p>
           <h1 className="mx-auto mt-6 max-w-4xl font-serif text-5xl leading-tight text-[var(--text-dark)] sm:text-6xl">
-            sustainability meets celebration
+            Sustainova – Sustainable Event Management System
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-[var(--text-soft)]">
             Elegant planning for modern events with guest logistics, SOS alerts, invitation workflows, and smart organization in one platform.

@@ -1,5 +1,5 @@
 services:
-  backend:
+  sustainova-backend:
     build: ./backend
     ports:
       - "8000:8000"
@@ -7,21 +7,25 @@ services:
       - ./backend/uploads:/app/uploads
     env_file:
       - ./.env
-    
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      REDIS_HOST: sustainova-redis
+      REDIS_PORT: "6379"
+    depends_on:
+      - sustainova-redis
 
-  frontend:
+  sustainova-frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     env_file:
       - ./.env
     depends_on:
-      - backend
+      - sustainova-backend
 
- 
-
-  redis:
-    image: redis:latest
+  sustainova-redis:
+    image: redis:7-alpine
     ports:
       - "6379:6379"
-

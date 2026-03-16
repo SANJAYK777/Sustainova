@@ -25,7 +25,10 @@ interface GuestListItem {
   number_of_people: number;
   coming_from?: string | null;
   transport_type?: string;
+  vehicle_type?: string;
   vehicle_number?: string | null;
+  car_numbers?: string[];
+  bike_numbers?: string[];
 }
 
 interface RoomNeededGuest {
@@ -96,7 +99,10 @@ interface SosAlert {
   id: number;
   guest_name: string;
   guest_phone: string;
+  event_name: string;
+  reason: string;
   triggered_at: string;
+  resolved: boolean;
 }
 
 export default function OrganizerDashboard() {
@@ -110,7 +116,13 @@ export default function OrganizerDashboard() {
   const [sosAlerts, setSosAlerts] = useState<SosAlert[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [locationDistribution, setLocationDistribution] = useState<LocationDistributionPoint[]>([]);
+  const [carParkingGuests, setCarParkingGuests] = useState<GuestListItem[]>([]);
+  const [bikeParkingGuests, setBikeParkingGuests] = useState<GuestListItem[]>([]);
   const [pollingEnabled, setPollingEnabled] = useState(true);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
   const previousSosCount = useRef(0);
 
   const syncSosCount = (count: number) => {
@@ -119,10 +131,11 @@ export default function OrganizerDashboard() {
   };
 
   const fetchSos = async (eventId: number) => {
-    const res = await api.get(`/sos/active/${eventId}`);
+    const res = await api.get(`/sos/event/${eventId}`);
     const alerts: SosAlert[] = res.data || [];
+    const activeAlerts = alerts.filter((alert) => !alert.resolved);
 
-    if (previousSosCount.current === 0 && alerts.length > 0) {
+    if (previousSosCount.current === 0 && activeAlerts.length > 0) {
       try {
         await new Audio('/alert.mp3').play();
       } catch {
@@ -130,9 +143,9 @@ export default function OrganizerDashboard() {
       }
     }
 
-    previousSosCount.current = alerts.length;
+    previousSosCount.current = activeAlerts.length;
     setSosAlerts(alerts);
-    syncSosCount(alerts.length);
+    syncSosCount(activeAlerts.length);
   };
 
   const fetchAnalytics = async () => {
@@ -143,6 +156,24 @@ export default function OrganizerDashboard() {
   const fetchGuestLocationDistribution = async () => {
     const res = await api.get('/api/guest-location-distribution');
     setLocationDistribution(Array.isArray(res.data) ? res.data : []);
+  };
+
+  const fetchParkingGuests = async () => {
+    const [carRes, bikeRes] = await Promise.all([
+      api.get('/api/parking/car-guests'),
+      api.get('/api/parking/bike-guests'),
+    ]);
+    setCarParkingGuests(Array.isArray(carRes.data) ? carRes.data : []);
+    setBikeParkingGuests(Array.isArray(bikeRes.data) ? bikeRes.data : []);
+  };
+
+  const refreshOrganizerSnapshot = async () => {
+    const res = await api.get('/dashboard/organizer');
+    const loadedDashboard: DashboardData = res.data;
+    setDashboard(loadedDashboard);
+    setCarParkingGuests(Array.isArray(loadedDashboard.car_parking_guests) ? loadedDashboard.car_parking_guests : []);
+    setBikeParkingGuests(Array.isArray(loadedDashboard.bike_parking_guests) ? loadedDashboard.bike_parking_guests : []);
+    return loadedDashboard;
   };
 
   useEffect(() => {
@@ -158,13 +189,10 @@ export default function OrganizerDashboard() {
 
     const fetchDashboard = async () => {
       try {
-        const [dashboardRes, eventsRes] = await Promise.all([
-          api.get('/dashboard/organizer'),
+        const [loadedDashboard, eventsRes] = await Promise.all([
+          refreshOrganizerSnapshot(),
           api.get('/events/'),
         ]);
-
-        const loadedDashboard: DashboardData = dashboardRes.data;
-        setDashboard(loadedDashboard);
 
         const firstEvent = eventsRes.data?.[0];
         if (firstEvent) {
@@ -178,6 +206,7 @@ export default function OrganizerDashboard() {
         await fetchSos(loadedDashboard.event_id);
         await fetchAnalytics();
         await fetchGuestLocationDistribution();
+        await fetchParkingGuests();
       } catch (err: any) {
         setError('Unable to load organizer dashboard');
         showToast('Unable to load organizer dashboard', 'error');
@@ -194,9 +223,11 @@ export default function OrganizerDashboard() {
 
     const interval = setInterval(async () => {
       try {
-        await fetchSos(dashboard.event_id);
+        const latestDashboard = await refreshOrganizerSnapshot();
+        await fetchSos(latestDashboard.event_id);
         await fetchAnalytics();
         await fetchGuestLocationDistribution();
+        await fetchParkingGuests();
       } catch (err: any) {
         if (err.response?.status === 401 || err.response?.status === 403) return;
       }
@@ -257,6 +288,34 @@ export default function OrganizerDashboard() {
     }
   };
 
+  const sendAnnouncement = async () => {
+    const title = announcementTitle.trim();
+    const message = announcementMessage.trim();
+    if (!dashboard?.event_id) return;
+    if (!title || !message) {
+      showToast('Please enter announcement title and message', 'error');
+      return;
+    }
+
+    setSendingAnnouncement(true);
+    try {
+      await api.post('/api/announcements', {
+        event_id: dashboard.event_id,
+        title,
+        message,
+      });
+      showToast('Announcement sent successfully', 'success');
+      setAnnouncementTitle('');
+      setAnnouncementMessage('');
+      setShowAnnouncementModal(false);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Unable to send announcement';
+      showToast(msg, 'error');
+    } finally {
+      setSendingAnnouncement(false);
+    }
+  };
+
   const statCards = dashboard
     ? [
         { label: 'Total Guests', value: dashboard.actual.total_guests, icon: 'TG' },
@@ -265,6 +324,18 @@ export default function OrganizerDashboard() {
         { label: 'Real Present', value: dashboard.actual.real_present_count, icon: 'RP' },
       ]
     : [];
+
+  const renderVehicleNumbers = (row: GuestListItem) => {
+    const cars = row.car_numbers?.filter(Boolean) || [];
+    const bikes = row.bike_numbers?.filter(Boolean) || [];
+    if (cars.length === 0 && bikes.length === 0) {
+      return row.vehicle_number || '-';
+    }
+    const segments = [];
+    if (cars.length > 0) segments.push(`Cars: ${cars.join(', ')}`);
+    if (bikes.length > 0) segments.push(`Bikes: ${bikes.join(', ')}`);
+    return segments.join(' | ');
+  };
 
   const renderTable = (title: string, rows: GuestListItem[]) => (
     <div className="premium-card section-fade overflow-hidden">
@@ -280,8 +351,8 @@ export default function OrganizerDashboard() {
                 <th className="py-3 pr-4">Phone</th>
                 <th className="py-3 pr-4">People</th>
                 <th className="py-3 pr-4">Coming From</th>
-                <th className="py-3">Transport</th>
-                <th className="py-3">Vehicle Number</th>
+                <th className="py-3">Vehicle Type</th>
+                <th className="py-3">Vehicle Numbers</th>
               </tr>
             </thead>
             <tbody>
@@ -294,8 +365,8 @@ export default function OrganizerDashboard() {
                   <td className="py-3 pr-4">{row.phone}</td>
                   <td className="py-3 pr-4">{row.number_of_people}</td>
                   <td className="py-3 pr-4">{row.coming_from || '-'}</td>
-                  <td className="py-3">{row.transport_type || '-'}</td>
-                  <td className="py-3">{row.vehicle_number || '-'}</td>
+                  <td className="py-3">{row.vehicle_type || row.transport_type || '-'}</td>
+                  <td className="py-3">{renderVehicleNumbers(row)}</td>
                 </tr>
               ))}
             </tbody>
@@ -357,7 +428,7 @@ export default function OrganizerDashboard() {
               <a
                 href={dashboard.qr_code_url}
                 download={`event_qr_${dashboard.event_id}.png`}
-                className="mt-3 inline-block bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 transition"
+                className="gold-button mt-3 inline-block"
               >
                 Download QR Code
               </a>
@@ -367,10 +438,16 @@ export default function OrganizerDashboard() {
       </section>
 
       <section className="section-fade">
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex flex-wrap justify-end gap-3">
+          <button
+            onClick={() => setShowAnnouncementModal(true)}
+            className="gold-button"
+          >
+            Send Announcement
+          </button>
           <button
             onClick={exportGuestList}
-            className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition"
+            className="secondary-button"
           >
             Export Guest List
           </button>
@@ -400,24 +477,47 @@ export default function OrganizerDashboard() {
         {sosAlerts.length === 0 ? (
           <p className="mt-2 text-[var(--text-soft)]">No active SOS alerts.</p>
         ) : (
-          <div className="mt-4 space-y-4">
-            {sosAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="animate-pulse rounded-3xl border border-red-500 bg-red-50 p-5 shadow-md"
-              >
-                <p className="text-lg font-semibold text-red-700">SOS ALERT</p>
-                <p className="mt-2 text-[var(--text-dark)]">Guest: {alert.guest_name}</p>
-                <p className="text-[var(--text-dark)]">Phone: {alert.guest_phone}</p>
-                <p className="text-[var(--text-soft)]">Time: {formatTime(alert.triggered_at)}</p>
-                <button
-                  onClick={() => resolveSOS(alert.id)}
-                  className="gold-button mt-3"
-                >
-                  Resolve
-                </button>
-              </div>
-            ))}
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-red-200 bg-white">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-red-200 bg-red-100 text-sm text-red-800">
+                  <th className="px-4 py-3">Guest Name</th>
+                  <th className="px-4 py-3">Guest Phone</th>
+                  <th className="px-4 py-3">Event Name</th>
+                  <th className="px-4 py-3">Reason for SOS</th>
+                  <th className="px-4 py-3">Time Sent</th>
+                  <th className="px-4 py-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sosAlerts.map((alert, index) => (
+                  <tr
+                    key={alert.id}
+                    className={`${index % 2 === 0 ? 'bg-white' : 'bg-red-50/40'} border-b border-red-100 align-top`}
+                  >
+                    <td className="px-4 py-3 font-medium text-[var(--text-dark)]">{alert.guest_name}</td>
+                    <td className="px-4 py-3 text-[var(--text-dark)]">{alert.guest_phone}</td>
+                    <td className="px-4 py-3 text-[var(--text-dark)]">{alert.event_name || eventMeta?.event_name || '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-dark)] whitespace-pre-wrap">{alert.reason || '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-soft)]">{formatTime(alert.triggered_at)}</td>
+                    <td className="px-4 py-3">
+                      {alert.resolved ? (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          Resolved
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => resolveSOS(alert.id)}
+                          className="gold-button"
+                        >
+                          Resolve
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -616,8 +716,8 @@ export default function OrganizerDashboard() {
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {renderTable('Car Parking Guests', dashboard.car_parking_guests)}
-        {renderTable('Bike Parking Guests', dashboard.bike_parking_guests)}
+        {renderTable('Car Parking Guests', carParkingGuests)}
+        {renderTable('Bike Parking Guests', bikeParkingGuests)}
       </section>
 
       <section className="rounded-xl shadow-md border p-4 section-fade">
@@ -652,6 +752,63 @@ export default function OrganizerDashboard() {
           </div>
         )}
       </section>
+
+      {showAnnouncementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-6">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+            <h4 className="font-serif text-2xl text-[var(--text-dark)]">Send Announcement</h4>
+            <p className="mt-2 text-[var(--text-soft)]">This will be visible to all guests for this event.</p>
+
+            <label htmlFor="announcement-title" className="mt-4 block text-sm text-[var(--text-soft)]">
+              Announcement Title
+            </label>
+            <input
+              id="announcement-title"
+              value={announcementTitle}
+              onChange={(e) => setAnnouncementTitle(e.target.value)}
+              maxLength={200}
+              className="mt-2 w-full rounded-xl border border-[rgba(198,167,94,0.35)] bg-[#fffdf8] px-3 py-2 text-[var(--text-dark)] focus:outline-none focus:ring-2 focus:ring-[#C6A75E]/40"
+              placeholder="Enter announcement title"
+              disabled={sendingAnnouncement}
+            />
+
+            <label htmlFor="announcement-message" className="mt-4 block text-sm text-[var(--text-soft)]">
+              Announcement Message
+            </label>
+            <textarea
+              id="announcement-message"
+              value={announcementMessage}
+              onChange={(e) => setAnnouncementMessage(e.target.value)}
+              maxLength={2000}
+              rows={5}
+              className="mt-2 w-full rounded-xl border border-[rgba(198,167,94,0.35)] bg-[#fffdf8] px-3 py-2 text-[var(--text-dark)] focus:outline-none focus:ring-2 focus:ring-[#C6A75E]/40"
+              placeholder="Enter announcement details"
+              disabled={sendingAnnouncement}
+            />
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowAnnouncementModal(false);
+                  setAnnouncementTitle('');
+                  setAnnouncementMessage('');
+                }}
+                className="secondary-button"
+                disabled={sendingAnnouncement}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendAnnouncement}
+                className="gold-button disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={sendingAnnouncement || !announcementTitle.trim() || !announcementMessage.trim()}
+              >
+                {sendingAnnouncement ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

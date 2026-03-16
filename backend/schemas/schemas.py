@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 # ---------------- USER ----------------
@@ -91,7 +91,11 @@ class GuestCreate(BaseModel):
     coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: Optional[str] = "None"
+    car_count: Optional[int] = None
+    bike_count: Optional[int] = None
     vehicle_number: Optional[str] = None
+    car_numbers: Optional[list[str]] = None
+    bike_numbers: Optional[list[str]] = None
     needs_room: Optional[str] = None
     aadhar_number: Optional[str] = None
     room_type: Optional[str] = None
@@ -105,7 +109,11 @@ class GuestRSVPCreate(BaseModel):
     coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: Optional[str] = "None"
+    car_count: Optional[int] = None
+    bike_count: Optional[int] = None
     vehicle_number: Optional[str] = None
+    car_numbers: Optional[list[str]] = None
+    bike_numbers: Optional[list[str]] = None
     needs_room: Optional[str] = None
     aadhar_number: Optional[str] = None
     room_type: Optional[str] = None
@@ -121,12 +129,17 @@ class GuestOut(BaseModel):
     coming_from: Optional[str] = None
     transport_type: Optional[str] = None
     parking_type: str
+    car_count: int
+    bike_count: int
     vehicle_number: Optional[str] = None
+    car_numbers: Optional[list[str]] = None
+    bike_numbers: Optional[list[str]] = None
     needs_room: Optional[str] = None
     aadhar_number: Optional[str] = None
     room_type: Optional[str] = None
     guest_qr_token: Optional[str] = None
     guest_qr_code_url: Optional[str] = None
+    status: str
 
     class Config:
         from_attributes = True
@@ -159,19 +172,57 @@ class CheckinResponse(BaseModel):
     checked_in_guests: int
     remaining_guests: int
     real_present_count: int
+
+
+class GuestRegistrationUpdate(BaseModel):
+    number_of_people: Optional[int] = None
+    vehicle_type: Optional[str] = None
+    vehicle_count: Optional[int] = None
+    vehicle_number: Optional[str] = None
+
+
+class GuestRegistrationStatusOut(BaseModel):
+    guest_id: int
+    status: str
 # ---------------- SOS ----------------
 
 class SOSCreate(BaseModel):
     event_id: int
     guest_id: int
+    reason: str
+
+
+class SOSTriggerIn(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
 
 
 class SOSOut(BaseModel):
     id: int
     event_id: int
     guest_id: int
+    reason: str
     triggered_at: datetime
     resolved: bool
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------- ANNOUNCEMENTS ----------------
+
+class AnnouncementCreate(BaseModel):
+    event_id: int
+    title: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+class AnnouncementOut(BaseModel):
+    id: int
+    event_id: int
+    title: str
+    message: str
+    created_at: datetime
+    created_by: int
 
     class Config:
         from_attributes = True

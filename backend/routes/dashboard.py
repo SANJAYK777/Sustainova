@@ -1,11 +1,14 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 import math
 import os
+import time
+import logging
 
 from database import get_db
-from models.models import Event, Guest, SOS, Attendance
+from models.models import Event, Guest, SOS, Attendance, VehicleDetail
 from dependencies.auth import get_current_user
 from ml.predict import predict_event_resources
 from utils.phone import phone_candidates
@@ -49,7 +52,23 @@ CITY_ALIASES = {
     "pattabhiram": "pattabiram",
 }
 DEFAULT_COORDINATES = {"lat": 20.5937, "lng": 78.9629}  # India centroid fallback
-TRAVEL_RISK_DEBUG = os.getenv("TRAVEL_RISK_DEBUG", "1") == "1"
+TRAVEL_RISK_DEBUG = os.getenv("TRAVEL_RISK_DEBUG", "0") == "1"
+logger = logging.getLogger(__name__)
+
+
+def query_with_retry(db: Session, fn, retries: int = 1, delay: float = 0.15):
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except OperationalError as exc:
+            db.rollback()
+            if attempt >= retries:
+                logger.warning("Dashboard DB query failed after retry: %s", exc)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Database temporarily unavailable. Please retry.",
+                ) from exc
+            time.sleep(delay)
 
 def normalized_parking_type(value: str | None) -> str:
     raw = (value or "No Parking").strip().lower()
@@ -69,6 +88,68 @@ def normalized_room_type(value: str | None) -> str:
     if raw.startswith("triple"):
         return "Triple"
     return "Unspecified"
+
+
+def is_active_guest(guest: Guest) -> bool:
+    return (getattr(guest, "status", "registered") or "registered").strip().lower() != "cancelled"
+
+
+def query_parking_guests(db: Session, event_id: int, vehicle_type: str) -> list[Guest]:
+    target = (vehicle_type or "").strip().lower()
+    if target not in {"car", "bike"}:
+        return []
+
+    def _query():
+        base = db.query(Guest).filter(
+            Guest.event_id == event_id,
+            func.lower(func.coalesce(Guest.status, "registered")) == "registered",
+        )
+        if target == "car":
+            return base.filter(func.coalesce(Guest.car_count, 0) > 0).all()
+        return base.filter(func.coalesce(Guest.bike_count, 0) > 0).all()
+
+    return query_with_retry(db, _query)
+
+
+def fetch_vehicle_numbers(db: Session, guest_ids: list[int]) -> dict[int, dict[str, list[str]]]:
+    mapping = {guest_id: {"car": [], "bike": []} for guest_id in guest_ids}
+    if not guest_ids:
+        return mapping
+    rows = query_with_retry(
+        db,
+        lambda: db.query(VehicleDetail).filter(VehicleDetail.guest_id.in_(guest_ids)).all(),
+    )
+    for row in rows:
+        bucket = mapping.setdefault(row.guest_id, {"car": [], "bike": []})
+        if row.vehicle_type in {"car", "bike"}:
+            bucket[row.vehicle_type].append(row.vehicle_number)
+    return mapping
+
+
+def serialize_parking_guest(guest: Guest, vehicle_map: dict[int, dict[str, list[str]]] | None = None) -> dict:
+    numbers = (vehicle_map or {}).get(guest.id, {"car": [], "bike": []})
+    car_count = int(getattr(guest, "car_count", 0) or 0)
+    bike_count = int(getattr(guest, "bike_count", 0) or 0)
+    if car_count > 0 and bike_count > 0:
+        vehicle_type_label = "Car & Bike"
+    elif car_count > 0:
+        vehicle_type_label = "Car"
+    elif bike_count > 0:
+        vehicle_type_label = "Bike"
+    else:
+        vehicle_type_label = guest.parking_type or "None"
+    return {
+        "id": guest.id,
+        "name": guest.name,
+        "phone": guest.phone,
+        "number_of_people": guest.number_of_people,
+        "coming_from": guest.coming_from,
+        "transport_type": guest.transport_type,
+        "vehicle_type": vehicle_type_label,
+        "vehicle_number": guest.vehicle_number,
+        "car_numbers": numbers.get("car", []),
+        "bike_numbers": numbers.get("bike", []),
+    }
 
 
 def city_coordinates(city: str) -> tuple[float, float] | None:
@@ -231,9 +312,16 @@ def guest_dashboard(
 
     return {
         "event_id": event.id,
+        "guest_id": guest.id,
         "qr_code_url": event.qr_code_url,
         "guest_qr_token": guest.guest_qr_token,
         "guest_qr_code_url": guest.guest_qr_code_url,
+        "number_of_people": guest.number_of_people,
+        "parking_type": guest.parking_type or "None",
+        "car_count": int(getattr(guest, "car_count", 0) or 0),
+        "bike_count": int(getattr(guest, "bike_count", 0) or 0),
+        "vehicle_number": guest.vehicle_number,
+        "status": guest.status or "registered",
         "event_name": event.event_name,
         "event_date": event.event_date,
         "location": event.location,
@@ -259,13 +347,23 @@ def organizer_dashboard_analytics(
     if user.get("role") != "organizer":
         raise HTTPException(status_code=403, detail="Access forbidden")
 
-    event = db.query(Event).filter(Event.user_id == int(user.get("sub"))).first()
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    guests = db.query(Guest).filter(Guest.event_id == event.id).all()
-    attendance_rows = db.query(Attendance).filter(Attendance.event_id == event.id).all()
-    checked_in_guest_ids = {row.guest_id for row in attendance_rows}
+    guests = [
+        g
+        for g in query_with_retry(db, lambda: db.query(Guest).filter(Guest.event_id == event.id).all())
+        if is_active_guest(g)
+    ]
+    attendance_rows = query_with_retry(
+        db, lambda: db.query(Attendance).filter(Attendance.event_id == event.id).all()
+    )
+    active_guest_ids = {g.id for g in guests}
+    checked_in_guest_ids = {row.guest_id for row in attendance_rows if row.guest_id in active_guest_ids}
 
     locations: dict[str, int] = {}
     vehicle_types = {"Car": 0, "Bike": 0, "No Vehicle": 0}
@@ -275,12 +373,13 @@ def organizer_dashboard_analytics(
         location = (guest.coming_from or "Unknown").strip() or "Unknown"
         locations[location] = locations.get(location, 0) + 1
 
-        parking_type = normalized_parking_type(guest.parking_type)
-        if parking_type == "car":
-            vehicle_types["Car"] += 1
-        elif parking_type == "bike":
-            vehicle_types["Bike"] += 1
-        else:
+        car_count = int(getattr(guest, "car_count", 0) or 0)
+        bike_count = int(getattr(guest, "bike_count", 0) or 0)
+        if car_count > 0:
+            vehicle_types["Car"] += car_count
+        if bike_count > 0:
+            vehicle_types["Bike"] += bike_count
+        if car_count == 0 and bike_count == 0:
             vehicle_types["No Vehicle"] += 1
 
         room_bucket = normalized_room_type(guest.room_type)
@@ -309,24 +408,24 @@ def organizer_guest_location_distribution(
     if user.get("role") != "organizer":
         raise HTTPException(status_code=403, detail="Access forbidden")
 
-    event = db.query(Event).filter(Event.user_id == int(user.get("sub"))).first()
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    grouped_rows = (
-        db.query(Guest.coming_from, func.count(Guest.id))
-        .filter(Guest.event_id == event.id)
-        .group_by(Guest.coming_from)
-        .all()
-    )
-
-    return [
-        {
-            "location": (location_raw or "Unknown").strip() or "Unknown",
-            "guests": int(count or 0),
-        }
-        for location_raw, count in grouped_rows
+    guests = [
+        g
+        for g in query_with_retry(db, lambda: db.query(Guest).filter(Guest.event_id == event.id).all())
+        if is_active_guest(g)
     ]
+    grouped: dict[str, int] = {}
+    for guest in guests:
+        location = (guest.coming_from or "Unknown").strip() or "Unknown"
+        grouped[location] = grouped.get(location, 0) + 1
+
+    return [{"location": location, "guests": count} for location, count in grouped.items()]
 
 
 @analytics_router.get("/guest-travel-map")
@@ -337,20 +436,24 @@ def organizer_guest_travel_map(
     if user.get("role") != "organizer":
         raise HTTPException(status_code=403, detail="Access forbidden")
 
-    event = db.query(Event).filter(Event.user_id == int(user.get("sub"))).first()
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    grouped_rows = (
-        db.query(Guest.coming_from, func.count(Guest.id))
-        .filter(Guest.event_id == event.id)
-        .group_by(Guest.coming_from)
-        .all()
-    )
-
+    guests = [
+        g
+        for g in query_with_retry(db, lambda: db.query(Guest).filter(Guest.event_id == event.id).all())
+        if is_active_guest(g)
+    ]
+    grouped: dict[str, int] = {}
+    for guest in guests:
+        location = (guest.coming_from or "Unknown").strip() or "Unknown"
+        grouped[location] = grouped.get(location, 0) + 1
     rows = []
-    for city_raw, count in grouped_rows:
-        city = (city_raw or "Unknown").strip() or "Unknown"
+    for city, count in grouped.items():
         coords = city_coordinates(city)
         if not coords:
             coords = (DEFAULT_COORDINATES["lat"], DEFAULT_COORDINATES["lng"])
@@ -366,6 +469,46 @@ def organizer_guest_travel_map(
     return rows
 
 
+@analytics_router.get("/parking/car-guests")
+def organizer_car_parking_guests(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.get("role") != "organizer":
+        raise HTTPException(status_code=403, detail="Access forbidden")
+
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    guests = query_parking_guests(db, event.id, "car")
+    vehicle_map = fetch_vehicle_numbers(db, [guest.id for guest in guests])
+    return [serialize_parking_guest(guest, vehicle_map) for guest in guests]
+
+
+@analytics_router.get("/parking/bike-guests")
+def organizer_bike_parking_guests(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.get("role") != "organizer":
+        raise HTTPException(status_code=403, detail="Access forbidden")
+
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    guests = query_parking_guests(db, event.id, "bike")
+    vehicle_map = fetch_vehicle_numbers(db, [guest.id for guest in guests])
+    return [serialize_parking_guest(guest, vehicle_map) for guest in guests]
+
+
 @router.get("/organizer")
 def organizer_dashboard(
     user: dict = Depends(get_current_user),
@@ -377,32 +520,36 @@ def organizer_dashboard(
         raise HTTPException(status_code=403, detail="Access forbidden")
 
     # Get organizer's event
-    event = db.query(Event).filter(Event.user_id == int(user.get("sub"))).first()
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
     # Get all guests for this event
-    guests = db.query(Guest).filter(Guest.event_id == event.id).all()
+    guests = [
+        g
+        for g in query_with_retry(db, lambda: db.query(Guest).filter(Guest.event_id == event.id).all())
+        if is_active_guest(g)
+    ]
     
     # Calculate totals
     total_guests = len(guests)
     total_people = sum(g.number_of_people for g in guests) if guests else 0
-    attendance_rows = db.query(Attendance).filter(Attendance.event_id == event.id).all()
-    checked_in_guests = len(attendance_rows)
+    attendance_rows = query_with_retry(
+        db, lambda: db.query(Attendance).filter(Attendance.event_id == event.id).all()
+    )
+    active_guest_ids = {g.id for g in guests}
+    relevant_attendance_rows = [row for row in attendance_rows if row.guest_id in active_guest_ids]
+    checked_in_guests = len(relevant_attendance_rows)
     remaining_guests = max(total_guests - checked_in_guests, 0)
-    real_present_count = sum(a.actual_people_count or 0 for a in attendance_rows)
+    real_present_count = sum(a.actual_people_count or 0 for a in relevant_attendance_rows)
     
-    # Count parking using explicit DB filters (exclude "No Parking")
-    car_parking = db.query(Guest).filter(
-        Guest.event_id == event.id,
-        Guest.parking_type.in_(["Car Parking", "Car"])
-    ).count()
-    bike_parking = db.query(Guest).filter(
-        Guest.event_id == event.id,
-        Guest.parking_type.in_(["Bike Parking", "Bike"])
-    ).count()
-    print("Car parking:", car_parking)
-    print("Bike parking:", bike_parking)
+    # Aggregate parking by explicit vehicle counts collected during RSVP.
+    car_parking = sum(int(getattr(g, "car_count", 0) or 0) for g in guests)
+    bike_parking = sum(int(getattr(g, "bike_count", 0) or 0) for g in guests)
+    logger.debug("Car parking: %s | Bike parking: %s", car_parking, bike_parking)
 
     total_car_parking = car_parking
     total_bike_parking = bike_parking
@@ -412,33 +559,11 @@ def organizer_dashboard(
     )
     
     # Filter lists
-    car_parking_guests = [
-        {
-            "id": g.id,
-            "name": g.name,
-            "phone": g.phone,
-            "number_of_people": g.number_of_people,
-            "coming_from": g.coming_from,
-            "transport_type": g.transport_type,
-            "vehicle_number": g.vehicle_number,
-        }
-        for g in guests
-        if normalized_parking_type(g.parking_type) == "car"
-    ]
-
-    bike_parking_guests = [
-        {
-            "id": g.id,
-            "name": g.name,
-            "phone": g.phone,
-            "number_of_people": g.number_of_people,
-            "coming_from": g.coming_from,
-            "transport_type": g.transport_type,
-            "vehicle_number": g.vehicle_number,
-        }
-        for g in guests
-        if normalized_parking_type(g.parking_type) == "bike"
-    ]
+    car_guest_rows = query_parking_guests(db, event.id, "car")
+    bike_guest_rows = query_parking_guests(db, event.id, "bike")
+    vehicle_map = fetch_vehicle_numbers(db, [g.id for g in guests])
+    car_parking_guests = [serialize_parking_guest(g, vehicle_map) for g in car_guest_rows]
+    bike_parking_guests = [serialize_parking_guest(g, vehicle_map) for g in bike_guest_rows]
 
     room_guests = [
         {
@@ -455,10 +580,13 @@ def organizer_dashboard(
         if g.needs_room and g.needs_room.lower() == "yes"
     ]
 
-    rooms_needed = db.query(Guest).filter(
-        Guest.event_id == event.id,
-        Guest.needs_room == "Yes"
-    ).all()
+    rooms_needed = query_with_retry(
+        db,
+        lambda: db.query(Guest).filter(
+            Guest.event_id == event.id,
+            Guest.needs_room == "Yes"
+        ).all(),
+    )
 
     rooms_needed_guests = [
         {
@@ -477,9 +605,11 @@ def organizer_dashboard(
             "number_of_people": g.number_of_people,
             "parking_type": (g.parking_type or "None"),
             "vehicle_number": g.vehicle_number,
+            "car_numbers": vehicle_map.get(g.id, {}).get("car", []),
+            "bike_numbers": vehicle_map.get(g.id, {}).get("bike", []),
         }
         for g in guests
-        if normalized_parking_type(g.parking_type) in {"car", "bike"}
+        if (int(getattr(g, "car_count", 0) or 0) > 0) or (int(getattr(g, "bike_count", 0) or 0) > 0)
     ]
 
     expected_guests = total_people
@@ -490,7 +620,7 @@ def organizer_dashboard(
             weather="clear",
         )
     except Exception as exc:
-        print(f"ML dashboard fallback used: {exc}")
+        logger.warning("ML dashboard fallback used: %s", exc)
         ml_prediction = {
             "predicted_attendance": int(expected_guests * 0.85),
             "predicted_car_parking": total_car_parking,
@@ -555,16 +685,23 @@ def organizer_sos(
     if user.get("role") != "organizer":
         raise HTTPException(status_code=403, detail="Access forbidden")
 
-    event = db.query(Event).filter(Event.user_id == int(user.get("sub"))).first()
+    event = query_with_retry(
+        db,
+        lambda: db.query(Event).filter(Event.user_id == int(user.get("sub"))).first(),
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    alerts = (
-        db.query(SOS, Guest)
-        .join(Guest, Guest.id == SOS.guest_id)
-        .filter(SOS.event_id == event.id, SOS.resolved.is_(False))
-        .order_by(SOS.triggered_at.desc())
-        .all()
+    alerts = query_with_retry(
+        db,
+        lambda: (
+            db.query(SOS, Guest, Event)
+            .join(Guest, Guest.id == SOS.guest_id)
+            .join(Event, Event.id == SOS.event_id)
+            .filter(SOS.event_id == event.id, SOS.resolved.is_(False))
+            .order_by(SOS.triggered_at.desc())
+            .all()
+        ),
     )
 
     return [
@@ -572,9 +709,11 @@ def organizer_sos(
             "id": sos.id,
             "guest_name": guest.name,
             "guest_phone": guest.phone,
+            "event_name": event_row.event_name,
+            "reason": sos.reason,
             "triggered_at": sos.triggered_at
         }
-        for sos, guest in alerts
+        for sos, guest, event_row in alerts
     ]
 
 

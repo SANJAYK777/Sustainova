@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import math
+import logging
 
 from database import get_db
 from dependencies.auth import get_current_user
@@ -9,6 +10,7 @@ from models.models import Event, Guest
 from schemas.schemas import MLPredictRequest, MLPredictResponse
 
 router = APIRouter(prefix="/ml", tags=["ml"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/predict", response_model=MLPredictResponse)
@@ -51,7 +53,7 @@ def predict_attendance_endpoint(
                 "food_estimate": int(math.ceil(value * 1.1)),
             }
         except Exception as exc:
-            print(f"ML direct prediction fallback used: {exc}")
+            logger.warning("ML direct prediction fallback used: %s", exc)
             return {
                 "predicted_attendance": int(payload.group_size or 0),
                 "predicted_car_parking": 0,
@@ -84,11 +86,11 @@ def predict_attendance_endpoint(
         )
         return prediction
     except Exception as exc:
-        print(f"ML prediction fallback used: {exc}")
+        logger.warning("ML prediction fallback used: %s", exc)
         return {
             "predicted_attendance": int(sum(g.number_of_people for g in guests) * 0.85),
-            "predicted_car_parking": sum(1 for g in guests if (g.parking_type or "").strip().lower() == "car"),
-            "predicted_bike_parking": sum(1 for g in guests if (g.parking_type or "").strip().lower() == "bike"),
+            "predicted_car_parking": sum(int(getattr(g, "car_count", 0) or 0) for g in guests),
+            "predicted_bike_parking": sum(int(getattr(g, "bike_count", 0) or 0) for g in guests),
             "predicted_rooms": sum(1 for g in guests if (g.needs_room or "").strip().lower() == "yes"),
             "food_estimate": int(sum(g.number_of_people for g in guests) * 0.95),
         }

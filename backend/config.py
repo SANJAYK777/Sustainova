@@ -14,7 +14,7 @@ class Settings:
     )
 
     # Redis (OTP)
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
 
     # Twilio (SMS)

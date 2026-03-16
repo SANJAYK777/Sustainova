@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "eventify-frontend",
+  "name": "sustainova-frontend",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -27,4 +27,6 @@
     "typescript": "^5.0.4"
   }
 }
+
+
 
