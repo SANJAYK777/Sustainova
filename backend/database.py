@@ -66,6 +66,7 @@ else:
         "keepalives_interval": 10,
         "keepalives_count": 5,
         "connect_timeout": DB_CONNECT_TIMEOUT,
+        "sslmode": "require",  # <-- add this line
     }
     engine_kwargs["pool_size"] = DB_POOL_SIZE
     engine_kwargs["max_overflow"] = DB_MAX_OVERFLOW
