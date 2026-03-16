@@ -20,9 +20,8 @@ logger = logging.getLogger(__name__)
 DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "5"))
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
-DB_CONNECT_RETRIES = int(os.getenv("DB_CONNECT_RETRIES", "10"))
-DB_CONNECT_DELAY = float(os.getenv("DB_CONNECT_DELAY", "1.0"))
-
+DB_CONNECT_RETRIES = int(os.getenv("DB_CONNECT_RETRIES", "20"))
+DB_CONNECT_DELAY = float(os.getenv("DB_CONNECT_DELAY", "2.0"))
 ALLOWED_SCHEMA_TABLES = {
     "events", "guests", "attendance", "sos", "vehicle_details", "room_allocations"
 }
@@ -66,7 +65,7 @@ else:
         "keepalives_interval": 10,
         "keepalives_count": 5,
         "connect_timeout": DB_CONNECT_TIMEOUT,
-        "sslmode": "require",  # <-- add this line
+        "sslmode": "require",  # <-- Add this line
     }
     engine_kwargs["pool_size"] = DB_POOL_SIZE
     engine_kwargs["max_overflow"] = DB_MAX_OVERFLOW
