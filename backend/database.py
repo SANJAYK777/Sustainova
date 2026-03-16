@@ -1,13 +1,19 @@
 import logging
 import os
+import time
 from urllib.parse import urlparse
+from uuid import uuid4
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
 
+# -------------------
+# Configuration
+# -------------------
 database_url = settings.DATABASE_URL
 logger = logging.getLogger(__name__)
 
@@ -17,8 +23,18 @@ DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
 DB_CONNECT_RETRIES = int(os.getenv("DB_CONNECT_RETRIES", "10"))
 DB_CONNECT_DELAY = float(os.getenv("DB_CONNECT_DELAY", "1.0"))
 
+ALLOWED_SCHEMA_TABLES = {
+    "events", "guests", "attendance", "sos", "vehicle_details", "room_allocations"
+}
 
+# -------------------
+# Safe DB URL
+# -------------------
 def _safe_database_target(url: str) -> str:
+    """
+    Returns a safe version of the database URL for logging without crashing on hostnames.
+    Handles SQLite, Postgres, and hostnames.
+    """
     if url.startswith("sqlite"):
         return url
     parsed = urlparse(url)
@@ -26,8 +42,14 @@ def _safe_database_target(url: str) -> str:
     port = parsed.port or ""
     user = parsed.username or ""
     path = parsed.path or ""
+    # Skip IP parsing; Supabase hostnames will fail ipaddress.ip_address()
     return f"{parsed.scheme}://{user}@{host}:{port}{path}"
 
+logger.info("Database target: %s", _safe_database_target(database_url))
+
+# -------------------
+# SQLAlchemy Engine
+# -------------------
 engine_kwargs = {
     "echo": False,
     "pool_pre_ping": True,
@@ -48,26 +70,17 @@ else:
     engine_kwargs["pool_size"] = DB_POOL_SIZE
     engine_kwargs["max_overflow"] = DB_MAX_OVERFLOW
 
-logger.info("Database target: %s", _safe_database_target(database_url))
 engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# utility: wait until database is accepting connections
-# utility: wait until database is accepting connections
-import time
-from uuid import uuid4
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
-from sqlalchemy import text
-
-ALLOWED_SCHEMA_TABLES = {"events", "guests", "attendance", "sos", "vehicle_details", "room_allocations"}
-
-
+# -------------------
+# Helper Functions
+# -------------------
 def _safe_table_name(table_name: str) -> str:
     if table_name not in ALLOWED_SCHEMA_TABLES:
         raise ValueError(f"Unsupported table name: {table_name}")
     return table_name
-
 
 def _table_exists(connection, table_name: str) -> bool:
     table_name = _safe_table_name(table_name)
@@ -75,8 +88,7 @@ def _table_exists(connection, table_name: str) -> bool:
 
     if dialect == "postgresql":
         exists = connection.execute(
-            text("SELECT to_regclass(:table_name) IS NOT NULL"),
-            {"table_name": table_name},
+            text("SELECT to_regclass(:table_name) IS NOT NULL"), {"table_name": table_name}
         ).scalar()
         return bool(exists)
 
@@ -88,7 +100,6 @@ def _table_exists(connection, table_name: str) -> bool:
         return exists is not None
 
     return False
-
 
 def _get_columns(connection, table_name: str) -> set[str]:
     table_name = _safe_table_name(table_name)
@@ -114,6 +125,9 @@ def _get_columns(connection, table_name: str) -> set[str]:
 
     return set()
 
+# -------------------
+# Wait for DB
+# -------------------
 def wait_for_db(retries: int | None = None, delay: float | None = None):
     """Block until the database is ready or raise after retries."""
     if retries is None:
@@ -132,17 +146,19 @@ def wait_for_db(retries: int | None = None, delay: float | None = None):
             print(f"Database not ready. Retrying {attempt}/{retries}...")
             time.sleep(delay)
 
-    # DO NOT raise OperationalError manually
     raise RuntimeError(f"Could not connect to database after {retries} attempts")
 
-
+# -------------------
+# Ensure Schema
+# -------------------
 def ensure_runtime_schema():
     """
     Lightweight, idempotent schema sync for environments without migrations.
-    Adds guest QR fields and attendance uniqueness if missing.
+    Adds missing columns, indices, and tables if necessary.
     """
     try:
         with engine.begin() as connection:
+            # Events table
             if _table_exists(connection, "events"):
                 existing_event_columns = _get_columns(connection, "events")
                 event_statements = []
@@ -153,62 +169,28 @@ def ensure_runtime_schema():
                 for statement in event_statements:
                     connection.execute(text(statement))
 
+            # Guests table
             if _table_exists(connection, "guests"):
                 existing_guest_columns = _get_columns(connection, "guests")
                 statements = []
-                if "guest_qr_token" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN guest_qr_token VARCHAR")
-                if "guest_qr_code_url" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN guest_qr_code_url VARCHAR")
-                if "coming_from" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN coming_from TEXT")
-                if "vehicle_number" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN vehicle_number TEXT")
-                if "car_count" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN car_count INTEGER DEFAULT 0")
-                if "bike_count" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN bike_count INTEGER DEFAULT 0")
-                if "aadhar_number" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN aadhar_number VARCHAR(12)")
-                if "room_type" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN room_type TEXT")
-                if "status" not in existing_guest_columns:
-                    statements.append("ALTER TABLE guests ADD COLUMN status VARCHAR DEFAULT 'registered'")
-
+                guest_columns_to_add = {
+                    "guest_qr_token": "VARCHAR",
+                    "guest_qr_code_url": "VARCHAR",
+                    "coming_from": "TEXT",
+                    "vehicle_number": "TEXT",
+                    "car_count": "INTEGER DEFAULT 0",
+                    "bike_count": "INTEGER DEFAULT 0",
+                    "aadhar_number": "VARCHAR(12)",
+                    "room_type": "TEXT",
+                    "status": "VARCHAR DEFAULT 'registered'",
+                }
+                for col, typ in guest_columns_to_add.items():
+                    if col not in existing_guest_columns:
+                        statements.append(f"ALTER TABLE guests ADD COLUMN {col} {typ}")
                 for statement in statements:
                     connection.execute(text(statement))
 
-                connection.execute(
-                    text("UPDATE guests SET status = 'registered' WHERE status IS NULL OR TRIM(status) = ''")
-                )
-
-                # Backfill historical rows that predate explicit parking counts.
-                connection.execute(
-                    text(
-                        """
-                        UPDATE guests
-                        SET car_count = CASE
-                            WHEN LOWER(COALESCE(parking_type, '')) IN ('car', 'car parking')
-                                AND COALESCE(car_count, 0) = 0 THEN 1
-                            ELSE COALESCE(car_count, 0)
-                        END
-                        """
-                    )
-                )
-                connection.execute(
-                    text(
-                        """
-                        UPDATE guests
-                        SET bike_count = CASE
-                            WHEN LOWER(COALESCE(parking_type, '')) IN ('bike', 'bike parking')
-                                AND COALESCE(bike_count, 0) = 0 THEN 1
-                            ELSE COALESCE(bike_count, 0)
-                        END
-                        """
-                    )
-                )
-
-                # Keep existing rows valid with UUID tokens.
+                # Backfill UUID tokens
                 guest_rows = connection.execute(
                     text("SELECT id FROM guests WHERE guest_qr_token IS NULL")
                 ).fetchall()
@@ -219,11 +201,10 @@ def ensure_runtime_schema():
                     )
 
                 connection.execute(
-                    text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_guests_guest_qr_token ON guests (guest_qr_token)"
-                    )
+                    text("CREATE UNIQUE INDEX IF NOT EXISTS ix_guests_guest_qr_token ON guests (guest_qr_token)")
                 )
 
+            # Attendance table
             if _table_exists(connection, "attendance"):
                 connection.execute(
                     text(
@@ -236,112 +217,52 @@ def ensure_runtime_schema():
                     )
                 )
 
-            if not _table_exists(connection, "vehicle_details"):
-                if connection.engine.dialect.name == "postgresql":
-                    connection.execute(
-                        text(
-                            """
-                            CREATE TABLE IF NOT EXISTS vehicle_details (
-                                id SERIAL PRIMARY KEY,
-                                guest_id INTEGER NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
-                                vehicle_type VARCHAR NOT NULL,
-                                vehicle_number VARCHAR NOT NULL
-                            )
-                            """
-                        )
+            # Vehicle and Room tables creation handled here for Postgres and SQLite
+            for table_name, table_sql_list in {
+                "vehicle_details": [
+                    """
+                    CREATE TABLE IF NOT EXISTS vehicle_details (
+                        id SERIAL PRIMARY KEY,
+                        guest_id INTEGER NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+                        vehicle_type VARCHAR NOT NULL,
+                        vehicle_number VARCHAR NOT NULL
                     )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_vehicle_details_guest_id ON vehicle_details (guest_id)"
-                        )
+                    """,
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_details_guest_id ON vehicle_details (guest_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_details_vehicle_type ON vehicle_details (vehicle_type)",
+                ],
+                "room_allocations": [
+                    """
+                    CREATE TABLE IF NOT EXISTS room_allocations (
+                        id SERIAL PRIMARY KEY,
+                        guest_id INTEGER NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+                        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                        hotel_name VARCHAR NOT NULL,
+                        room_number VARCHAR NOT NULL,
+                        allocated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+                        CONSTRAINT uq_room_allocations_guest_id UNIQUE (guest_id)
                     )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_vehicle_details_vehicle_type ON vehicle_details (vehicle_type)"
-                        )
-                    )
+                    """,
+                    "CREATE INDEX IF NOT EXISTS ix_room_allocations_event_id ON room_allocations (event_id)",
+                ],
+            }.items():
+                if not _table_exists(connection, table_name) and connection.engine.dialect.name == "postgresql":
+                    for sql in table_sql_list:
+                        connection.execute(text(sql))
 
-            if not _table_exists(connection, "room_allocations"):
-                if connection.engine.dialect.name == "postgresql":
-                    connection.execute(
-                        text(
-                            """
-                            CREATE TABLE IF NOT EXISTS room_allocations (
-                                id SERIAL PRIMARY KEY,
-                                guest_id INTEGER NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
-                                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-                                hotel_name VARCHAR NOT NULL,
-                                room_number VARCHAR NOT NULL,
-                                allocated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-                                CONSTRAINT uq_room_allocations_guest_id UNIQUE (guest_id)
-                            )
-                            """
-                        )
-                    )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_room_allocations_event_id ON room_allocations (event_id)"
-                        )
-                    )
-                elif connection.engine.dialect.name == "sqlite":
-                    connection.execute(
-                        text(
-                            """
-                            CREATE TABLE IF NOT EXISTS room_allocations (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                guest_id INTEGER NOT NULL,
-                                event_id INTEGER NOT NULL,
-                                hotel_name TEXT NOT NULL,
-                                room_number TEXT NOT NULL,
-                                allocated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                UNIQUE(guest_id),
-                                FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE,
-                                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
-                            )
-                            """
-                        )
-                    )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_room_allocations_event_id ON room_allocations (event_id)"
-                        )
-                    )
-                elif connection.engine.dialect.name == "sqlite":
-                    connection.execute(
-                        text(
-                            """
-                            CREATE TABLE IF NOT EXISTS vehicle_details (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                guest_id INTEGER NOT NULL,
-                                vehicle_type TEXT NOT NULL,
-                                vehicle_number TEXT NOT NULL,
-                                FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE
-                            )
-                            """
-                        )
-                    )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_vehicle_details_guest_id ON vehicle_details (guest_id)"
-                        )
-                    )
-                    connection.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_vehicle_details_vehicle_type ON vehicle_details (vehicle_type)"
-                        )
-                    )
-
+            # SOS table
             if _table_exists(connection, "sos"):
                 existing_sos_columns = _get_columns(connection, "sos")
                 if "reason" not in existing_sos_columns:
                     connection.execute(text("ALTER TABLE sos ADD COLUMN reason TEXT"))
-                connection.execute(
-                    text("UPDATE sos SET reason = 'Emergency assistance needed' WHERE reason IS NULL")
-                )
+                connection.execute(text("UPDATE sos SET reason = 'Emergency assistance needed' WHERE reason IS NULL"))
+
     except SQLAlchemyError as exc:
         print(f"Schema sync skipped due to database compatibility issue: {exc}")
 
+# -------------------
 # Dependency
+# -------------------
 def get_db():
     db = SessionLocal()
     try:
